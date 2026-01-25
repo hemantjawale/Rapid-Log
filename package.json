@@ -1,5 +1,5 @@
 {
-  "name": "rapid-log",
+  "name": "@hemant_jawale/rapid-log",
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,14 +14,23 @@
     "type": "git",
     "url": "git+https://github.com/hemantjawale/Open-Logger.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "logger",
+    "logging",
+    "async",
+    "typescript",
+    "performance",
+    "circuit-breaker",
+    "batching",
+    "json-logger"
+  ],
+  "author": "Hemant Jawale",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/hemantjawale/Open-Logger/issues"
   },
   "homepage": "https://github.com/hemantjawale/Open-Logger#readme",
-  "description": "",
+  "description": "A high-performance, asynchronous Node.js logger featuring circuit breakers, batching, compression, and multiple transports (Console, HTTP). Built for scale and reliability.",
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.10",
