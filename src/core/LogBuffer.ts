@@ -60,14 +60,14 @@ export class LogBuffer {
       await Promise.all(this.transports.map(t => t.send(batch)));
     } catch (err) {
       // Fallback: write to stderr if transports fail
-      process.stderr.write(`OpenLogger Error: Failed to flush logs: ${err}\n`);
+      process.stderr.write(`RapidLog Error: Failed to flush logs: ${err}\n`);
     } finally {
       this.inflightBatches--;
       // Self-healing: If buffer has items (accumulated during backpressure), try to flush again
       if (this.buffer.length > 0) {
         this.flush().catch(err => {
             // Should not happen as flush catches internally, but good hygiene
-            process.stderr.write(`OpenLogger Error: Recursive flush failed: ${err}\n`);
+            process.stderr.write(`RapidLog Error: Recursive flush failed: ${err}\n`);
         });
       }
     }

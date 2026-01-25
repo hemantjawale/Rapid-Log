@@ -1,0 +1,13 @@
+# Source and Build Config
+src/
+tsconfig.json
+jest.config.js
+.gitignore
+
+# Environment and Logs
+.env
+*.log
+coverage/
+
+# Dependencies (redundant if node_modules is in .gitignore, but safe to keep)
+node_modules/

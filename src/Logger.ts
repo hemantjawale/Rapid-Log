@@ -51,13 +51,13 @@ export class Logger {
    * Call this in your application entry point.
    */
   public enableGracefulShutdown(): void {
-    const handler = async (signal: string) => {
+    const handler = async (_signal: string) => {
         // Use console.error to ensure it bypasses our own logger buffer if possible, or just as feedback
         // Actually, we want to be silent unless error.
         try {
             await this.flush();
         } catch (err) {
-            process.stderr.write(`OpenLogger flush failed: ${err}\n`);
+            process.stderr.write(`RapidLog flush failed: ${err}\n`);
         }
         process.exit(0);
     };
