@@ -1,179 +1,124 @@
 # @hemant_jawale/rapid-log
 
-![NPM Version](https://img.shields.io/npm/v/@hemant_jawale/rapid-log?style=flat-square)
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?style=flat-square)
-![License](https://img.shields.io/npm/l/@hemant_jawale/rapid-log?style=flat-square)
+A high-performance, asynchronous, and production-ready logging library for Node.js applications. Designed for scale, it features built-in circuit breakers, batching, backpressure management, and request context propagation.
 
-**rapid-log** is a production-grade, asynchronous logging library for Node.js designed for high-throughput applications. It prioritizes **performance** and **reliability** by offloading log transport to background buffers, ensuring your application's event loop is never blocked by I/O operations.
+## Features
 
-Built with **Circuit Breakers**, **Batching**, and **Compression** out of the box, it is ready for distributed systems where network reliability is not guaranteed.
+- **Native ESM Support**: Built specifically for modern Node.js environments using `"type": "module"`.
+- **Asynchronous Batching**: Logs are buffered and flushed in batches to minimize I/O overhead and improve application throughput.
+- **Circuit Breaker Pattern**: `HttpTransport` includes a stateful circuit breaker to prevent cascading failures during network outages.
+- **Backpressure Handling**: Intelligent buffer management drops logs when the system is under extreme load to preserve application stability.
+- **Context Propagation**: Leverages `AsyncLocalStorage` to automatically propagate request context (e.g., `traceId`, `userId`) across asynchronous call chains.
+- **Multiple Transports**: Includes `ConsoleTransport` for development and `HttpTransport` for shipping logs to aggregation services (e.g., Elasticsearch, Splunk).
+- **Compression**: Supports Gzip compression for HTTP payloads to reduce network bandwidth.
+- **Graceful Shutdown**: Automatically flushes pending logs on system signals (`SIGTERM`, `SIGINT`).
 
----
-
-## 🚀 Features
-
-- **Non-Blocking I/O**: Logs are buffered and flushed asynchronously.
-- **🛡️ Circuit Breaker**: Built-in protection against failing downstream log aggregators (e.g., Logstash, Splunk).
-- **📦 Smart Batching**: Aggregates logs to reduce network overhead (HTTP).
-- **🗜️ Compression**: Native Gzip support for HTTP transport to save bandwidth.
-- **🔍 Context Awareness**: `AsyncLocalStorage` integration for effortless Request ID / Transaction tracing.
-- **🔌 Pluggable Transports**: Modular design with built-in Console and HTTP transports.
-- **🚦 Graceful Shutdown**: Ensures all pending logs are flushed before the process exits.
-
----
-
-## 📦 Installation
+## Installation
 
 ```bash
 npm install @hemant_jawale/rapid-log
 ```
 
----
+## Quick Start
 
-## ⚡ Quick Start
+Initialize the logger with default settings (Console Transport):
 
 ```typescript
 import { Logger, LogLevel } from '@hemant_jawale/rapid-log';
 
-// 1. Initialize the Logger
 const logger = new Logger({
   level: LogLevel.INFO,
-  bufferSize: 100,      // Flush when 100 logs accumulate
-  flushIntervalMs: 2000 // ...or every 2 seconds
+  bufferSize: 100, // Flush after 100 logs
+  flushIntervalMs: 1000 // Or flush every 1 second
 });
 
-// 2. Log messages
-logger.info('Server started', { port: 3000, env: 'production' });
-
-// 3. Log errors with stack traces
-try {
-  throw new Error('Database disconnected');
-} catch (err) {
-  logger.error('Critical failure', { error: err });
-}
+logger.info('Application started', { env: 'production' });
 ```
 
----
+## Advanced Usage
 
-## 📖 Advanced Usage
+### HTTP Transport with Circuit Breaker
 
-### 1. HTTP Transport with Circuit Breaker
-
-Send logs to a remote endpoint (e.g., Elasticsearch, Logstash) without risking your app's stability.
+Configure the `HttpTransport` to reliably ship logs to a remote endpoint. The circuit breaker ensures your application doesn't hang if the logging server is unresponsive.
 
 ```typescript
 import { Logger, HttpTransport } from '@hemant_jawale/rapid-log';
 
 const httpTransport = new HttpTransport({
   url: 'https://logs.example.com/ingest',
-  timeout: 5000,
-  retries: 3,
-  compression: 'gzip',          // Compress payloads
-  circuitBreakerThreshold: 5,   // Open circuit after 5 consecutive failures
-  circuitBreakerResetMs: 30000  // Retry after 30 seconds
+  method: 'POST',
+  headers: { 'Authorization': 'Bearer token' },
+  circuitBreakerThreshold: 5, // Open circuit after 5 consecutive failures
+  circuitBreakerResetMs: 30000, // Retry after 30 seconds
+  compression: 'gzip', // Compress payloads
+  retries: 3 // Retry network errors up to 3 times
 });
 
 const logger = new Logger({
-  transports: [httpTransport]
+  transports: [httpTransport],
+  bufferSize: 500
 });
+
+logger.enableGracefulShutdown(); // Ensure logs are flushed on exit
 ```
 
-### 2. Request Tracing (Context Management)
+### Context Propagation (Request Tracing)
 
-Use `ContextManager` to attach metadata (like `requestId` or `userId`) to every log line within a specific execution scope, automatically.
+Use `ContextManager` to inject context (like Request IDs) that automatically attaches to all logs generated within that execution scope.
 
 ```typescript
 import { Logger, ContextManager } from '@hemant_jawale/rapid-log';
 
 const logger = new Logger();
 
-// Simulate an incoming HTTP request
-const requestId = 'req-12345';
-const userId = 'user-987';
-
-ContextManager.runWithContext({ requestId, userId }, () => {
-  // All logs inside this block will automatically have requestId & userId
-  logger.info('Processing payment'); 
+// Middleware example
+function requestMiddleware(req, res, next) {
+  const traceId = req.headers['x-request-id'] || crypto.randomUUID();
   
-  someInternalFunction(); 
-});
-
-function someInternalFunction() {
-  // This log ALSO has the context, even though we didn't pass it explicitly!
-  logger.debug('Validating currency');
+  // All logs inside this callback will have { traceId } attached automatically
+  ContextManager.runWithContext({ traceId }, () => {
+    logger.info('Request received'); // Log contains traceId
+    next();
+  });
 }
 ```
 
-### 3. Express Middleware
-
-Automatically log incoming HTTP requests with timing data.
-
-```typescript
-import express from 'express';
-import { Logger, createExpressMiddleware } from '@hemant_jawale/rapid-log';
-
-const app = express();
-const logger = new Logger();
-
-app.use(createExpressMiddleware(logger));
-
-app.get('/', (req, res) => {
-  res.send('Hello World');
-});
-// Logs: INFO "HTTP Request" { method: "GET", url: "/", status: 200, duration: 12ms, ... }
-```
-
-### 4. Graceful Shutdown
-
-Ensure no logs are lost when your application restarts or crashes.
-
-```typescript
-const logger = new Logger();
-
-// Automatically hooks into SIGTERM and SIGINT
-logger.enableGracefulShutdown();
-```
-
----
-
-## ⚙️ Configuration Reference
+## Configuration
 
 ### LoggerOptions
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `level` | `LogLevel` | `INFO` | Minimum log level (DEBUG, INFO, WARN, ERROR, FATAL) |
-| `transports` | `Transport[]` | `[ConsoleTransport]` | Destinations for your logs |
-| `bufferSize` | `number` | `100` | Max logs to hold in memory before flushing |
-| `flushIntervalMs` | `number` | `1000` | Max time to wait before flushing buffer |
-| `maxInflight` | `number` | `5` | Max concurrent flush operations |
-| `defaultContext` | `Object` | `{}` | Global metadata added to every log |
+| `level` | `LogLevel` | `INFO` | Minimum log level to capture. |
+| `transports` | `Transport[]` | `[ConsoleTransport]` | Array of transport instances. |
+| `bufferSize` | `number` | `100` | Number of logs to buffer before flushing. |
+| `flushIntervalMs` | `number` | `1000` | Maximum time (ms) to wait before flushing. |
+| `maxInflight` | `number` | `5` | Max concurrent flush requests allowed. |
+| `enabled` | `boolean` | `true` | Master switch to enable/disable logging. |
 
 ### HttpTransportOptions
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `url` | `string` | **Required** | The endpoint URL |
-| `method` | `string` | `POST` | HTTP Method |
-| `headers` | `Object` | `Content-Type: application/json` | Custom headers |
-| `compression` | `'gzip' \| 'none'` | `'none'` | Compress payload before sending |
-| `circuitBreakerThreshold` | `number` | `5` | Failures before stopping requests |
-| `circuitBreakerResetMs` | `number` | `30000` | Cooldown period for circuit breaker |
+| `url` | `string` | Required | Endpoint URL. |
+| `method` | `string` | `POST` | HTTP method. |
+| `circuitBreakerThreshold` | `number` | `5` | Failures before opening circuit. |
+| `circuitBreakerResetMs` | `number` | `30000` | Cooldown period for circuit breaker. |
+| `compression` | `'gzip' \| 'none'` | `'none'` | Payload compression. |
+| `retries` | `number` | `3` | Number of retry attempts for failed requests. |
 
----
+## Architecture
 
-## 🛠️ Architecture
-
-`rapid-log` uses a **Producer-Consumer** model:
-
-1.  **Application** calls `logger.info()`.
-2.  **Logger** pushes entry to an in-memory `LogBuffer`.
-3.  **LogBuffer** waits until `bufferSize` is reached OR `flushIntervalMs` elapses.
-4.  **Flusher** takes a batch of logs and sends them to all configured **Transports** in parallel.
-5.  **Circuit Breakers** in transports monitor success/failure rates and cut off connections to failing backends to prevent resource exhaustion.
-
----
+1.  **Ingestion**: `Logger.log()` accepts an entry and checks the log level.
+2.  **Context Enrichment**: `ContextManager` merges global context and async-local storage context.
+3.  **Buffering**: `LogBuffer` pushes the entry to an in-memory array.
+4.  **Flush Strategy**:
+    *   **Size-based**: Flushes immediately when `bufferSize` is reached.
+    *   **Time-based**: Flushes periodically based on `flushIntervalMs`.
+5.  **Transport Execution**: The batch is sent to all configured transports in parallel.
+    *   `HttpTransport` applies compression and checks Circuit Breaker state before sending.
+    *   If the circuit is open, the request is rejected immediately to save resources.
 
 ## License
 
-ISC © [Hemant Jawale](https://github.com/hemantjawale)
+ISC
