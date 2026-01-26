@@ -1,5 +1,6 @@
-import { Logger, LogLevel } from '../src';
-import { Transport } from '../src/transports/Transport';
+import { Logger, LogLevel } from '../src/index.js';
+import { Transport } from '../src/transports/Transport.js';
+import { jest } from '@jest/globals';
 
 describe('Logger Context Propagation', () => {
   let mockTransport: jest.Mocked<Transport>;

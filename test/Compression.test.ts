@@ -1,5 +1,5 @@
-import { HttpTransport } from '../src/transports/HttpTransport';
-import { LogEntry, LogLevel } from '../src/types';
+import { HttpTransport } from '../src/transports/HttpTransport.js';
+import { LogEntry, LogLevel } from '../src/types.js';
 import * as http from 'http';
 import * as zlib from 'zlib';
 

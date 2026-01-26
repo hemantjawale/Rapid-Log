@@ -1,8 +1,8 @@
-import { LogLevel, LogEntry } from './types';
-import { LogBuffer } from './core/LogBuffer';
-import { Transport } from './transports/Transport';
-import { ConsoleTransport } from './transports/ConsoleTransport';
-import { ContextManager } from './context/ContextManager';
+import { LogLevel, LogEntry } from './types.js';
+import { LogBuffer } from './core/LogBuffer.js';
+import { Transport } from './transports/Transport.js';
+import { ConsoleTransport } from './transports/ConsoleTransport.js';
+import { ContextManager } from './context/ContextManager.js';
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -20,7 +20,6 @@ export class Logger {
   private context: Record<string, unknown>;
   private enabled: boolean;
 
-  // Level priority map for O(1) comparison
   private static readonly LEVEL_PRIORITY: Record<LogLevel, number> = {
     [LogLevel.DEBUG]: 0,
     [LogLevel.INFO]: 1,
@@ -34,26 +33,19 @@ export class Logger {
     this.context = options.defaultContext ?? {};
     this.enabled = options.enabled ?? true;
     
-    // Default to ConsoleTransport if none provided
     const transports = options.transports && options.transports.length > 0 
       ? options.transports 
       : [new ConsoleTransport()];
       
-    const bufferSize = options.bufferSize ?? 100; // Default batch size
-    const flushInterval = options.flushIntervalMs ?? 1000; // Default 1 second
-    const maxInflight = options.maxInflight ?? 5; // Default 5 concurrent batches
+    const bufferSize = options.bufferSize ?? 100;
+    const flushInterval = options.flushIntervalMs ?? 1000;
+    const maxInflight = options.maxInflight ?? 5;
 
     this.buffer = new LogBuffer(bufferSize, flushInterval, transports, maxInflight);
   }
 
-  /**
-   * Registers SIGTERM and SIGINT handlers to flush logs before exit.
-   * Call this in your application entry point.
-   */
   public enableGracefulShutdown(): void {
     const handler = async (_signal: string) => {
-        // Use console.error to ensure it bypasses our own logger buffer if possible, or just as feedback
-        // Actually, we want to be silent unless error.
         try {
             await this.flush();
         } catch (err) {
@@ -90,7 +82,6 @@ export class Logger {
     if (!this.enabled) return;
     if (Logger.LEVEL_PRIORITY[level] < Logger.LEVEL_PRIORITY[this.level]) return;
 
-    // Merge contexts: Default < AsyncLocal < Explicit
     const asyncContext = ContextManager.getContext();
     
     const entry: LogEntry = {
@@ -107,18 +98,10 @@ export class Logger {
     this.buffer.add(entry);
   }
   
-  /**
-   * Force flush the buffer.
-   * Useful for graceful shutdowns.
-   */
   public async flush(): Promise<void> {
     await this.buffer.flush();
   }
 
-  /**
-   * Run a callback with a specific context.
-   * Helper to expose ContextManager functionality.
-   */
   public runWithContext<T>(context: Record<string, unknown>, callback: () => T): T {
     return ContextManager.runWithContext(context, callback);
   }

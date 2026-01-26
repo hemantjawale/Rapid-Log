@@ -1,5 +1,5 @@
-import { Transport } from './Transport';
-import { LogEntry } from '../types';
+import { Transport } from './Transport.js';
+import { LogEntry } from '../types.js';
 import * as http from 'http';
 import * as https from 'https';
 import * as zlib from 'zlib';
@@ -12,21 +12,20 @@ export interface HttpTransportOptions {
   timeout?: number;
   retries?: number;
   compression?: 'gzip' | 'none';
-  circuitBreakerThreshold?: number; // Failures before opening
-  circuitBreakerResetMs?: number;   // Time to stay open
+  circuitBreakerThreshold?: number;
+  circuitBreakerResetMs?: number;
 }
 
 enum CircuitState {
-  CLOSED,   // Normal
-  OPEN,     // Failing, reject immediately
-  HALF_OPEN // Testing if service is back
+  CLOSED,
+  OPEN,
+  HALF_OPEN
 }
 
 export class HttpTransport implements Transport {
   private readonly url: URL;
   private readonly options: Required<Omit<HttpTransportOptions, 'url' | 'headers'>> & { headers: Record<string, string> };
   
-  // Circuit Breaker State
   private circuitState: CircuitState = CircuitState.CLOSED;
   private failures = 0;
   private lastFailureTime = 0;
@@ -40,7 +39,7 @@ export class HttpTransport implements Transport {
       retries: options.retries ?? 3,
       compression: options.compression ?? 'none',
       circuitBreakerThreshold: options.circuitBreakerThreshold ?? 5,
-      circuitBreakerResetMs: options.circuitBreakerResetMs ?? 30000, // 30s default
+      circuitBreakerResetMs: options.circuitBreakerResetMs ?? 30000,
     };
   }
 
@@ -49,9 +48,7 @@ export class HttpTransport implements Transport {
       const now = Date.now();
       if (now - this.lastFailureTime > this.options.circuitBreakerResetMs) {
         this.circuitState = CircuitState.HALF_OPEN;
-        // Proceed to try ONE request
       } else {
-        // Fail fast to save resources
         return Promise.reject(new Error('Circuit Breaker is OPEN'));
       }
     }
@@ -84,12 +81,10 @@ export class HttpTransport implements Transport {
       await this.post(entries);
     } catch (err) {
       if (retriesLeft > 0) {
-        // Exponential backoff: 100ms, 200ms, 400ms...
         const delay = 100 * Math.pow(2, this.options.retries - retriesLeft);
         await new Promise(res => setTimeout(res, delay));
         return this.sendWithRetry(entries, retriesLeft - 1);
       }
-      // Bubble up error to LogBuffer (which prints to stderr)
       throw err;
     }
   }
@@ -99,7 +94,6 @@ export class HttpTransport implements Transport {
       let body: Buffer | string = JSON.stringify(entries);
       const headers = { ...this.options.headers };
 
-      // Handle Compression
       if (this.options.compression === 'gzip') {
         zlib.gzip(body, (err, result) => {
           if (err) return reject(err);
@@ -136,7 +130,7 @@ export class HttpTransport implements Transport {
       
       const req = lib.request(requestOptions, (res) => {
         if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-          res.resume(); // Consume response to free memory
+          res.resume();
           resolve();
         } else {
           res.resume();

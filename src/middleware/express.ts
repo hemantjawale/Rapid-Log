@@ -1,18 +1,12 @@
-import { Logger } from '../Logger';
+import { Logger } from '../Logger.js';
 
-/**
- * Creates an Express-compatible middleware for logging HTTP requests.
- * Uses duck-typing to avoid hard dependency on Express.
- */
 export function createExpressMiddleware(logger: Logger) {
   return (req: any, res: any, next: () => void) => {
     const start = Date.now();
     
-    // Hook into response finish event
     res.on('finish', () => {
       const duration = Date.now() - start;
       
-      // Extract useful metadata
       const context = {
         method: req.method,
         url: req.originalUrl || req.url,
@@ -22,7 +16,6 @@ export function createExpressMiddleware(logger: Logger) {
         ip: req.ip || (req.socket ? req.socket.remoteAddress : undefined),
       };
 
-      // Log based on status code
       if (res.statusCode >= 500) {
         logger.error('HTTP Request Failed', context);
       } else if (res.statusCode >= 400) {
