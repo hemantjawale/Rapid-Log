@@ -3,6 +3,9 @@ import { LogBuffer } from './core/LogBuffer.js';
 import { Transport } from './transports/Transport.js';
 import { ConsoleTransport } from './transports/ConsoleTransport.js';
 import { ContextManager } from './context/ContextManager.js';
+import { BreadcrumbManager } from './breadcrumbs/BreadcrumbManager.js';
+import { DynamicLogLevelManager, LevelOverride } from './levels/DynamicLogLevelManager.js';
+import { LogSearchEngine } from './search/SearchEngine.js';
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -19,14 +22,9 @@ export class Logger {
   private buffer: LogBuffer;
   private context: Record<string, unknown>;
   private enabled: boolean;
-
-  private static readonly LEVEL_PRIORITY: Record<LogLevel, number> = {
-    [LogLevel.DEBUG]: 0,
-    [LogLevel.INFO]: 1,
-    [LogLevel.WARN]: 2,
-    [LogLevel.ERROR]: 3,
-    [LogLevel.FATAL]: 4,
-  };
+  private breadcrumbManager: BreadcrumbManager;
+  private levelManager: DynamicLogLevelManager;
+  private searchEngine: LogSearchEngine;
 
   constructor(options: LoggerOptions = {}) {
     this.level = options.level ?? LogLevel.INFO;
@@ -42,6 +40,9 @@ export class Logger {
     const maxInflight = options.maxInflight ?? 5;
 
     this.buffer = new LogBuffer(bufferSize, flushInterval, transports, maxInflight);
+    this.breadcrumbManager = new BreadcrumbManager();
+    this.levelManager = new DynamicLogLevelManager(this.level);
+    this.searchEngine = new LogSearchEngine();
   }
 
   public enableGracefulShutdown(): void {
@@ -80,22 +81,30 @@ export class Logger {
 
   private log(level: LogLevel, message: string, context?: Record<string, unknown>): void {
     if (!this.enabled) return;
-    if (Logger.LEVEL_PRIORITY[level] < Logger.LEVEL_PRIORITY[this.level]) return;
 
     const asyncContext = ContextManager.getContext();
+    const mergedContext = { 
+        ...this.context, 
+        ...asyncContext,
+        ...context 
+    };
+
+    if (!this.levelManager.shouldLog(level, mergedContext)) {
+      return;
+    }
     
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
-      context: { 
-        ...this.context, 
-        ...asyncContext,
-        ...context 
-      },
+      context: mergedContext,
     };
 
-    this.buffer.add(entry);
+    const enrichedEntry = this.breadcrumbManager.attachToLog(entry);
+    this.breadcrumbManager.add(entry);
+    this.searchEngine.indexLog(enrichedEntry);
+
+    this.buffer.add(enrichedEntry);
   }
   
   public async flush(): Promise<void> {
@@ -104,5 +113,21 @@ export class Logger {
 
   public runWithContext<T>(context: Record<string, unknown>, callback: () => T): T {
     return ContextManager.runWithContext(context, callback);
+  }
+
+  public setLevel(level: LogLevel, options?: { userId?: string; feature?: string; path?: string; duration?: string }): string | void {
+    return this.levelManager.setLevel(level, options);
+  }
+
+  public getOverrides(): (LevelOverride & { id: string; remaining: number | null })[] {
+    return this.levelManager.listOverrides();
+  }
+
+  public removeOverride(ruleId: string): boolean {
+    return this.levelManager.removeOverride(ruleId);
+  }
+
+  public async search(query: string): Promise<{ logs: LogEntry[]; total: number; took: number }> {
+    return this.searchEngine.search(query);
   }
 }

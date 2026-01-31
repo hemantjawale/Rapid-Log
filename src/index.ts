@@ -5,3 +5,6 @@ export * from './transports/ConsoleTransport.js';
 export * from './transports/HttpTransport.js';
 export * from './middleware/express.js';
 export * from './context/ContextManager.js';
+export * from './breadcrumbs/BreadcrumbManager.js';
+export * from './levels/DynamicLogLevelManager.js';
+export * from './search/SearchEngine.js';

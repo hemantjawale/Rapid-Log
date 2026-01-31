@@ -83,6 +83,48 @@ function requestMiddleware(req, res, next) {
 }
 ```
 
+### Breadcrumb Trail
+Automatically captures the last 50 log entries for a trace and attaches them to any Error/Fatal log. This provides immediate context for debugging failures without querying a central database.
+
+```typescript
+// No configuration needed.
+// Simply ensure you are using ContextManager with a `traceId`.
+ContextManager.runWithContext({ traceId: 'req-123' }, () => {
+    logger.info('User authenticated');
+    logger.info('Querying database');
+    logger.error('Connection failed'); // Will include 'breadcrumbs' with previous 2 logs
+});
+```
+
+### Dynamic Log Levels
+Change log levels at runtime for specific users, features, or paths, with automatic expiration. Perfect for debugging specific issues in production without spamming global logs.
+
+```typescript
+// Enable DEBUG logs only for user '123' for 5 minutes
+logger.setLevel(LogLevel.DEBUG, { 
+    userId: '123', 
+    duration: '5m' 
+});
+
+// Enable DEBUG logs for 'checkout' feature
+logger.setLevel(LogLevel.DEBUG, { 
+    feature: 'checkout' 
+});
+```
+
+### In-Memory Smart Search
+Query recent logs directly from memory using a SQL-like syntax. Useful for health checks, admin dashboards, or local debugging.
+
+```typescript
+// Find all error logs for a specific user
+const result = await logger.search('level:error AND userId:123');
+
+// Find logs containing specific text
+const result = await logger.search('message:"Database connection timeout"');
+
+console.log(`Found ${result.total} logs`);
+```
+
 ## Configuration
 
 ### LoggerOptions

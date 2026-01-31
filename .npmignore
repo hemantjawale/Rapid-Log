@@ -3,7 +3,7 @@ src/
 tsconfig.json
 jest.config.js
 .gitignore
-
+a.txt
 # Environment and Logs
 .env
 *.log
